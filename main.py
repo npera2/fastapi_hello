@@ -5,7 +5,9 @@ import asyncio
 
 app = FastAPI()
 
-# 异步
+"""
+异步
+"""
 @app.get("/async")
 async def func_async():
     start = time.time()
@@ -14,7 +16,9 @@ async def func_async():
     end = time.time()
     return {"time": f'{end - start:.2f}s'}
 
-# 同步
+"""
+同步
+"""
 @app.get("/sync")
 def func_sync():
     start = time.time()
@@ -23,17 +27,23 @@ def func_sync():
     end = time.time()
     return {"time": f'{end - start:.2f}s'}
 
-# 路径参数
+"""
+路径参数
+"""
 @app.get("/path_parameter/{num}")
 async def test_path(num: int = Path(..., gt=0, lt=101, description="取值范围1-100")):  # 类型注解 Path
     return {f"现在是{num}"}
 
-# 查询参数
+"""
+查询参数
+"""
 @app.get("/query_parameter")
 async def test_query(name: str = Query("baozi", min_length=2, max_length=10), id_1: int = 6):  # 类型注解 Query
     return {"name": name, "id_1": id_1}
 
-# 请求体参数
+"""
+请求体参数
+"""
 # 1、定义类型
 from pydantic import BaseModel, Field
 class User(BaseModel):
@@ -44,7 +54,9 @@ class User(BaseModel):
 async def register(user: User):
     return user
 
-# HTMLResponse
+"""
+HTMLResponse
+"""
 from fastapi.responses import HTMLResponse
 @app.get("/html", response_class=HTMLResponse)
 async def get_html():
@@ -60,14 +72,18 @@ async def get_html():
     """
     return HTMLResponse(content=html_content)
 
-# FileResponse
+"""
+FileResponse
+"""
 from fastapi.responses import FileResponse
 @app.get("/file")
 async def get_file():
     path = '画.jpg'
     return FileResponse(path)
 
-# 自定义响应数据格式
+"""
+自定义响应数据格式
+"""
 class News(BaseModel):
     id: int
     title: str
@@ -79,7 +95,9 @@ async def get_news(id: int):
         "title": f"this is num_{id} book"
     }
 
-# 异常处理
+"""
+异常处理
+"""
 from fastapi import HTTPException
 @app.get('/exception/{id}')
 async def get_exception(id: int):
