@@ -5,6 +5,7 @@ from fastapi import FastAPI, Path, Query
 import time
 import asyncio
 from fastapi import Depends
+from pydantic import BaseModel, Field
 
 
 """
@@ -27,8 +28,8 @@ async_engine = create_async_engine(
 # 2、定义模型类：基类 + 表对应的模型类
 # 基类：创建时间、更新时间；书籍表：id、书名、作者、价格、出版社
 class Base(DeclarativeBase):
-    create_time: Mapped[datetime] = mapped_column(DateTime, default=func.now, comment="创建时间")
-    update_time: Mapped[datetime] = mapped_column(DateTime, default=func.now, onupdate=func.now(), comment="更新时间")
+    create_time: Mapped[datetime] = mapped_column(DateTime, default=func.now(), comment="创建时间")
+    update_time: Mapped[datetime] = mapped_column(DateTime, default=func.now(), onupdate=func.now(), comment="更新时间")
 
 class Book(Base):
     __tablename__ = "book"
@@ -103,6 +104,34 @@ async def select_book_1(db: AsyncSession = Depends(get_database)):
 
 
 """
+数据库操作 - 聚合查询: func.方法(模型类.属性)
+"""
+@app.get("/book/count")
+async def get_count(db: AsyncSession = Depends(get_database)):
+    # result = await db.execute(select(func.count(Book.id)))
+    # result = await db.execute(select(func.max(Book.price)))
+    # result = await db.execute(select(func.sum(Book.price)))
+    result = await db.execute(select(func.avg(Book.price)))
+    count = result.scalar()
+    print(count)
+    return count
+
+
+"""
+数据库操作 - 分页查询: select().offset().limit()
+offset: 跳过的记录数。注: offset = (当前页码 - 1) * 每页数量 limit
+limit: 返回的记录数
+"""
+@app.get("/book/get_books")
+async def get_book_list(page: int = 1, page_size: int = 3, db: AsyncSession = Depends(get_database)):
+    skip = (page - 1) * page_size
+    stmt = select(Book).offset(skip).limit(page_size)
+    result = await db.execute(stmt)
+    books = result.scalars().all()
+    return {"books": books}
+
+
+"""
 数据库操作 - 条件查询
 1、比较判断: ==; >; <等
 2、模糊查询: like()
@@ -114,6 +143,63 @@ async def select_book_2(book_id: int, db: AsyncSession = Depends(get_database)):
     result = await db.execute(select(Book).where(Book.id == book_id))
     book = result.scalar_one_or_none()  # 有则赋值该数据，没有则赋值null
     return book
+
+
+"""
+数据库操作 - 新增
+核心步骤：定义 ORM 对象 → 添加对象到事务: add(对象) → commit 提交到数据库
+"""
+class BookBase(BaseModel):
+    id: int
+    bookname: str
+    author: str
+    price: float
+    publisher: str
+
+@app.post("/add_book")
+async def add_book(book: BookBase, db: AsyncSession = Depends(get_database)):
+    # 获取 book 参数，创建图书对象( __dict__ 返回 book 对象的属性字典)
+    book_obj = Book(**book.__dict__)
+    db.add(book_obj)
+    await db.commit()
+    return book
+
+
+"""
+数据库操作 - 更新
+核心步骤: 查询 get → 属性重新赋值 → commit 提交到数据库
+"""
+class BookUpdate(BaseModel):
+    bookname: str
+    price: float
+
+@app.put("/update_book/{book_id}")
+async def update_book(book_id: int, data: BookUpdate, db: AsyncSession = Depends(get_database)):
+    # 1、查询
+    book = await db.get(Book, book_id)
+    if book is None:
+        raise HTTPException(status_code=404, detail="Book not found")
+    # 2、修改属性（重新赋值）
+    book.bookname = data.bookname
+    book.price = data.price
+    # 3、提交
+    await db.commit()
+    return book
+
+
+"""
+数据库操作 - 删除
+核心步骤: 查询 get → delete 删除 → commit 提交到数据库
+"""
+@app.delete("/delete_book")
+async def delete_book(book_id: int, db: AsyncSession = Depends(get_database)):
+    db_book = await db.get(Book, book_id)
+    if db_book is None:
+        raise HTTPException(status_code=404, detail="Book not found")
+    await db.delete(db_book)
+    await db.commit()
+    return {"meassage": "Book deleted"}
+
 
 """
 异步
@@ -159,7 +245,6 @@ async def test_query(name: str = Query("baozi", min_length=2, max_length=10), id
 请求体参数
 """
 # 1、定义类型
-from pydantic import BaseModel, Field
 class User(BaseModel):
     username: str = Field("baozi", min_length=2)
     password: str
